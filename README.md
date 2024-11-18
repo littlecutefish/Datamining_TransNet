@@ -2,6 +2,16 @@
 
 This is a modified pytorch implementation of [_**Augmenting Knowledge Transfer across Graphs**_](https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=10027706) (ICDM 2022).
 
+### Environment
+#### ❯ python --version
+Python 3.8.20
+
+#### ❯ nvcc --version
+nvcc: NVIDIA (R) Cuda compiler driver
+Copyright (c) 2005-2022 NVIDIA Corporation
+Built on Wed_Sep_21_10:41:10_Pacific_Daylight_Time_2022
+Cuda compilation tools, release 11.8, V11.8.89
+
 ### Datasets
 The original datasets M2 and A1 are provided in this repository. Additional datasets (physics and cs) have been added for academic domain transfer learning experiments. Please download other datasets from the original papers listed in the paper.
 
