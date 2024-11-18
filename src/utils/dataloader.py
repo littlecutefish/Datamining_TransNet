@@ -11,7 +11,7 @@ from sklearn import preprocessing
 import json
 import scipy.sparse
 from torch_geometric.io import read_txt_array
-from torch_geometric.datasets import Amazon
+from torch_geometric.datasets import Amazon, Coauthor
 import os.path as osp
 import pdb
 
@@ -29,6 +29,10 @@ class GraphLoader(object):
             self.path = os.path.join(self.dirname,'acmv9.mat')
         elif name == 'D2':
             self.path = os.path.join(self.dirname,'dblpv7.mat') 
+        # elif name == 'Blog1':
+        #     self.path = os.path.join(self.dirname,'Blog1.mat') 
+        # elif name == 'Blog2':
+        #     self.path = os.path.join(self.dirname,'Blog2.mat') 
         self._load()
         self._registerStat()
 
@@ -53,12 +57,20 @@ class GraphLoader(object):
             self.X = torch.from_numpy(self.X).cuda()
             self.Y = torch.from_numpy(self.Y).cuda()
 
+    # X 是節點特徵，包含了每個節點的屬性信息
+    # Y 是節點標籤，用於監督學習任務
+    # A 是鄰接矩陣，描述了圖的結構
+    # G 是NetworkX圖對象，提供了豐富的圖操作功能
     def _load(self):
-        if self.name == 'comp' or self.name == 'photo':
+        if self.name == 'comp' or self.name == 'photo' or self.name == 'cs' or self.name == 'physics':
             if self.name == 'comp':
                 dataset = Amazon(root='data/', name='computers')
             elif self.name == 'photo':
                 dataset = Amazon(root='data/', name='photo')
+            elif self.name == 'cs':
+                dataset = Coauthor(root='data/', name='CS')
+            elif self.name == 'physics':
+                dataset = Coauthor(root='data/', name='Physics')
             graph = dataset[0]
             self.X = graph.x.numpy().astype(np.float32)
             self.Y = graph.y.numpy()
@@ -90,7 +102,7 @@ class GraphLoader(object):
             self.X = np.array(X.astype(np.float32))
             self.X = self.X[:, self.X.sum(0) != 0]
             self.Y = Y
-            self.G = nx.from_numpy_matrix(A)
+            self.G = nx.from_numpy_array(A)
             self._loadConfig()
             self.edges = torch.tensor(np.array(self.G.edges).T, dtype=torch.long).cuda()  
             self._getAdj()

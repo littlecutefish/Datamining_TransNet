@@ -1,0 +1,2 @@
+https://github.com/TrustAGI-Lab/UDAGCN
+https://pytorch-geometric.readthedocs.io/en/latest/modules/datasets.html#torch_geometric.datasets.Planetoid

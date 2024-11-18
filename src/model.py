@@ -16,6 +16,7 @@ import pdb
 logger = logging.getLogger(__name__)
 
 
+# GRL Layer
 class GradientReversalLayer(torch.autograd.Function):
     @staticmethod
     def forward(ctx, inputs):
@@ -33,20 +34,27 @@ class TransNet(nn.Module):
     """
     Multi-layer perceptron with adversarial regularizer by domain classification.
     """
+
+    # 初始化模型結構
+    # 包含 GNN、域分類器、trinity 分類器等
     def __init__(self, configs):
         super(TransNet, self).__init__()
         self.num_hidden_layers = len(configs["hidden_layers"])
         self.num_sources = configs["num_sources"]
         self.num_classes = configs["num_classes"]
         self.h_dim = configs['feat_num']
-        self.hiddens = GNN(nfeat=self.h_dim,
-                              nhid=configs["hidden_layers"],
-                              nclass=2,    # not used
-                              ndim=configs["ndim"],
-                              gnn_type=configs["type"],
-                              bias=True,
-                              dropout=configs["dropout"])
-        self.domain_disc = torch.nn.Sequential(
+        
+        # GNN model 圖神經網路模型
+        # 對應算法步驟 1
+        # 1-1. 域統一模型
+        self.hiddens = GNN( nfeat=self.h_dim,  
+                            nhid=configs["hidden_layers"],
+                            nclass=2,    # not used
+                            ndim=configs["ndim"],
+                            gnn_type=configs["type"],
+                            bias=True,
+                            dropout=configs["dropout"])
+        self.domain_disc = torch.nn.Sequential( 
             nn.Linear(configs["ndim"], configs["ndim"]),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Linear(configs["ndim"], 2),
@@ -56,15 +64,20 @@ class TransNet(nn.Module):
             nn.LeakyReLU(0.2, inplace=True),
             nn.Linear(self.h_dim, 2),
         )
+
         # Parameter of the first dimension reduction layer.
         self.dimRedu = nn.ModuleList([torch.nn.Sequential(nn.Dropout(p=0.7), nn.Linear(ndim, self.h_dim)) for ndim in configs["input_dim"]])
+        
         # Parameter of the final softmax classification layer.
+        # 1-2. trinity-signal 分類器 g(.)
         self.triplet_embedding = nn.ModuleList([torch.nn.Sequential(
                                             nn.Linear(2*configs["ndim"], configs["ndim"]),
                                             ) for _ in configs["num_classes"]])
         self.classifier = nn.ModuleList([torch.nn.Sequential(
                                             nn.Dropout(p=0.5),
                                             nn.Linear(configs["ndim"], 2*nclass+1)) for nclass in configs["num_classes"]])
+
+        # 1-3. 下游任務分類器 h(.)
         self.gnn_classifier = GNN(nfeat=configs["ndim"], 
                                 nhid=[configs["ndim"]], 
                                 nclass=2, 
@@ -80,21 +93,29 @@ class TransNet(nn.Module):
         self.t_class = configs["num_classes"][-1]
         self.t_dim = configs["ndim"]
 
+    # 對應步驟2-6的 pre-train 階段
+    # 計算域不變表示
+    # 生成 trinity signals
+    # M1
     def forward(self, sinputs, tinputs, sadj, tadj, rate):
         global ratio
         ratio = rate
 
+        # 步驟3: 計算域不變表示
         sh_relu = []
         sh_linear = []
         th_relu = tinputs.clone()
         for i in range(self.num_sources):
             sh_relu.append(sinputs[i].clone())
 
+        # 通過feature encoder (MLP)和GNN獲取域不變特徵
         for i in range(self.num_sources):
-            sh_linear.append(self.dimRedu[i](sh_relu[i]))
-            sh_relu[i] = F.relu(self.hiddens(sh_linear[i], sadj[i]))
+            sh_linear.append(self.dimRedu[i](sh_relu[i]))  # MLP
+            sh_relu[i] = F.relu(self.hiddens(sh_linear[i], sadj[i]))  # GNN
         th_linear = self.dimRedu[-1](th_relu)
         th_relu = F.relu(self.hiddens(th_linear, tadj))
+
+        # 步驟4: 生成trinity signals (在訓練循環中處理)
         sdomains, tdomains, sdomains_linear, tdomains_linear = [], [], [], []
         for i in range(self.num_sources):
             sdomains.append(F.log_softmax(self.domains[i](self.grls[i](sh_relu[i])), dim=1))
@@ -104,7 +125,10 @@ class TransNet(nn.Module):
 
         return sh_relu, th_relu, sh_linear, th_linear, sdomains, tdomains, sdomains_linear, tdomains_linear
 
+    # 對應步驟7-9的 fine-tune 階段
+    # 凍結特定層進行微調
     def finetune(self):
+        # 凍結特定層進行微調
         for param in self.hiddens.parameters():
             param.requires_grad = False
         for param in self.dimRedu[-1].parameters():
@@ -116,6 +140,8 @@ class TransNet(nn.Module):
         for param in self.dimRedu[-1].parameters():
             param.requires_grad = True
 
+    # 用於預測階段
+    # 對目標域數據進行推理
     def inference(self, tinput, adj, index=-1, pseudo=False):
         h_relu = tinput.clone()
         h_linear = self.dimRedu[index](h_relu)
@@ -180,6 +206,7 @@ class GeneralSignal(object):
                 self.sample_num.append(self.tmps[0].shape[0] // 10)
             else:
                 self.sample_num.append(self.sample_num[0]*2*i)
+        print(self.sample_num)
 
         for i in range(0, 6):
             self.train_tmps.append(np.array(np.where((self.train_distance < self.thresh[i])&(self.train_distance >= self.thresh[i+1]))).transpose())
@@ -203,7 +230,7 @@ class GeneralSignal(object):
         few_shot_label = torch.cat((labels, labels[permu]), 0)
         sudo_labels, self.dicts = assign_sudo_label(few_shot_pred_label, few_shot_label, self.device, relax=relax)
 
-
+    # M2
     def make_loss(self, embeddings, dicts=None, task='train'):
         if self.index == -1:
             node_pairs = self.sample(self.agent.distance, self.tmps, k=self.sample_num)
@@ -226,6 +253,7 @@ class GeneralSignal(object):
 
         label0_loss, label1_loss, dist_loss = 0.0, 0.0, 0.0
         if self.index == -1:
+            # 使用 few-shot 樣本生成 pair
             permu = np.random.permutation(self.idx_finetune.shape[0])
             few_shot_pair = torch.cat((embeddings[self.idx_finetune], embeddings[self.idx_finetune][permu]), 1)
             few_shot_embedding = self.model.triplet_embedding[0](few_shot_pair)
@@ -238,6 +266,8 @@ class GeneralSignal(object):
             sudo_labels, _ = assign_sudo_label(few_shot_pred_label, few_shot_label, self.device, dicts=dicts)
             pred_dist = output[:, -1]
             dist_loss_p = F.mse_loss(pred_dist, self.pseudo_labels[node_pairs], reduction='mean')
+
+            # Mixup 操作
             if self.mixup:
                 iter_num = 1
                 for _ in range(iter_num):
@@ -245,8 +275,11 @@ class GeneralSignal(object):
                     o_mix = self.model.classifier[0](x_mix)
                     p_mix0 = o_mix[:, :sudo_label_num]
                     p_mix1 = o_mix[:, sudo_label_num:2*sudo_label_num]
+
+                    # Mixup loss calculation
                     label0_loss += mixup_hidden_criterion(p_mix0, sudo_labels[:self.idx_finetune.shape[0]], sudo_labels[:self.idx_finetune.shape[0]][permuted_idx], lam)
                     label1_loss += mixup_hidden_criterion(p_mix1, sudo_labels[self.idx_finetune.shape[0]:], sudo_labels[self.idx_finetune.shape[0]:][permuted_idx], lam)
+                    
                     x_mix, permuted_idx, lam = mixup_hidden(hidden_embedding, self.alpha)
                     o_mix = self.model.classifier[0](x_mix)
                     pd_mix = o_mix[:, -1]

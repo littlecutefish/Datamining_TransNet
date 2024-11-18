@@ -21,36 +21,37 @@ from tqdm import tqdm
 import sys
 import pdb
 import copy
+from datetime import datetime
 
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-n", "--name", help="Name used to save the log file.", type=str, default="logs")
-parser.add_argument("-s", "--seed", help="Random seed.", type=int, default=93)
+parser.add_argument("-s", "--seed", help="Random seed.", type=int, default=100) # 93
 parser.add_argument("-u", "--mu", help="coefficient for the domain adversarial loss", type=float, default=1e-2)
 parser.add_argument('--hidden', type=list, default=[64, 32], help='Number of hidden units.')  # append to the last layer
 parser.add_argument('--lr', type=float, default=3e-3, help='Initial learning rate.')
 parser.add_argument("-e", "--epoch", help="Number of training epochs", type=int, default=300)
-parser.add_argument("-b", "--batch_size", help="Batch size during training", type=int, default=16)
-parser.add_argument("--datasets",type=str, default="A+Wacm")
+parser.add_argument("-b", "--batch_size", help="Batch size during training", type=int, default=1) # 16
+parser.add_argument("--datasets",type=str, default="M2+A1") #A+Wacm
 parser.add_argument('--dim', type=int, default=16, help='Number of output dim.')
 parser.add_argument('--dropout', type=float, default=0.5, help='Dropout rate (1 - keep probability).')
 parser.add_argument('--weight_decay', type=float, default=5e-4, help='Weight decay (L2 loss on parameters).')
-parser.add_argument('--finetune_epoch', type=int, default=2000, help='Finetune Epoch.')
-parser.add_argument('--finetune_lr', type=float, default=1e-3, help='Finetune learning rate.')
+parser.add_argument('--finetune_epoch', type=int, default=800, help='Finetune Epoch.') # 2000
+parser.add_argument('--finetune_lr', type=float, default=0.01, help='Finetune learning rate.') # 1e-3
 parser.add_argument('--weight', action='append', type=str, default=None, help='trained model weight')
-parser.add_argument("--ratio", type=float, default=1.0)   # train dataset / all dataset
+parser.add_argument("--ratio", type=float, default=0.7)   # 1.0 # train dataset / all dataset
 parser.add_argument("--root_dir", type=str, default='logs')   # output dir path
 parser.add_argument("--time", type=bool, default=True)   # add time to store path
 parser.add_argument("--save", type=bool, default=False)   # save the model or not
 parser.add_argument("--plt_i", type=int, default=1000)   # plot interval
-parser.add_argument("--few_shot", type=float, default=0.04)  # few_shot number (support decimal and int)
+parser.add_argument("--few_shot", type=float, default=5)  # 0.04  # few_shot number (support decimal and int)
 parser.add_argument("--only", type=bool, default=False)   # only use the first dataset as target
 parser.add_argument("--viz", type=bool, default=False)   # visualization
 parser.add_argument("--gnn", type=str, default="gcn")   # choose to use which gnn: [gin, gcn, gat, graphsage]
 parser.add_argument("--disc", type=str, default='3')   # domain discriminator type
 parser.add_argument("--pre_finetune", type=int, default=200)   # fix diRedu and hidden, finetune classfier
-parser.add_argument("--_lambda", action='append', type=str, default=None)   # weight for different signals
-parser.add_argument("--_alpha", action='append', type=str, default=None)   # weight for target domain
+parser.add_argument("--_lambda", action='append', type=str, default=[0.02, 0.05])  # None # weight for different signals
+parser.add_argument("--_alpha", action='append', type=str, default=[0.01, 0.01]) # None  # weight for target domain
 parser.add_argument("--alpha", type=float, default=1.0)   # in mixup beta distribution
 parser.add_argument("--no_mixup", action='store_false', default=True)   # parameter in mixup
 parser.add_argument("--no_balance", action='store_false', default=True)   # weight for cluster loss
@@ -62,26 +63,37 @@ args = parser.parse_args()
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
 
+# 建立日誌紀錄器
 logger = get_logger(args.name)
 log = Logger('TransNet', str(args.epoch) + '-' + str(args.finetune_epoch) + '-' + str(args.few_shot) +
              '-' + args.datasets + '-' + str(args.mu), root_dir=args.root_dir, with_timestamp=args.time)
 
+# 記錄參數到日誌中
 log.add_params(vars(args))
 
+# 設定隨機種子
 np.random.seed(args.seed)
 torch.manual_seed(args.seed)
 torch.cuda.manual_seed_all(args.seed)
 
+# 定義訓練週期函數
 def train_epoch(model, dataset, dataloader, optimizer, num_data_sets, args, source_insts, 
                 target_insts, source_adj, source_labels, target_labels, target_adj, i, device, 
                 rate, sudo_weight, source_agent, target_agent, nclass, epoch):
+    """
+    執行一個訓練週期，訓練模型參數。
+    """
+    # few-shot學習中選擇的樣本索引
     few_shot_idx = dataset[i].finetune_indices
     dloaders = []
     model.train()
+
+    # 將每個數據集設置為訓練模式，並初始化數據加載器
     for j in range(num_data_sets):
         dataset[j].change_task('train')
         dloaders.append(iter(dataloader[j]))
 
+    # 設定域標籤（source域為0，target域為1）
     for j in range(num_data_sets):
         if j != i:
             s_labels = torch.zeros(dataset[j].num, requires_grad=False).type(
@@ -90,8 +102,10 @@ def train_epoch(model, dataset, dataloader, optimizer, num_data_sets, args, sour
         torch.LongTensor).to(device)
 
     optimizer.zero_grad()
+    # forward()，計算源域和目標域的特徵表示
     svec, tvec, sh_linear, th_linear, sdomains, tdomains, sdomains_0, tdomains_0 = model(source_insts, target_insts, source_adj, target_adj, rate)
 
+    # 如果有sudo權重，則計算加權損失
     if sudo_weight > 0:
         if epoch > 1000:
             relax=True
@@ -102,7 +116,7 @@ def train_epoch(model, dataset, dataloader, optimizer, num_data_sets, args, sour
     else:
         dt_losses = torch.stack([(source_agent[j].make_loss(svec[j])) for j in range(num_sources)])
 
-    # Domain loss                                    
+    # M1: Domain Loss 域損失計算                      
     if args.no_balance == True:
         selected_idxs = []
         selected_idx = []
@@ -135,21 +149,26 @@ def train_epoch(model, dataset, dataloader, optimizer, num_data_sets, args, sour
     if args.disc == '3':
         domain_losses = domain_losses + 5*domain_losses_0
 
+    # 總損失 L_total = L_dt + mu * L_domain
     loss = torch.max(dt_losses) + args.mu * torch.min(domain_losses)
 
     running_loss = loss.item()
     dt_loss = torch.max(dt_losses).item()
     domain_loss = torch.max(domain_losses).item()
 
+    # 反向傳播和參數更新
     loss.backward()
     optimizer.step()
 
     return running_loss, dt_loss, domain_loss, svec, tvec, sh_linear, th_linear
 
-
+# 定義驗證週期函數
 def vali_epoch(model, dataset, dataloader, optimizer, num_data_sets, args, source_insts, 
                 target_insts, source_adj, source_labels, target_labels, target_adj, i, device, 
                 rate, sudo_weight, source_agent, target_agent, nclass, epoch):
+    """
+    執行驗證週期，評估模型在驗證集上的表現。
+    """
     model.eval()
     dloaders = []
     for j in range(num_data_sets):
@@ -191,8 +210,11 @@ def vali_epoch(model, dataset, dataloader, optimizer, num_data_sets, args, sourc
 
     return vali_loss
 
-
+# 測試模型在 target domain 上的表現
 def test(model, dataset, args, insts, labels, adj, device, index=-1):
+    """
+    測試模型在目標領域上的分類準確率、f1得分、召回率和精確率。
+    """
     model.eval()
     _insts = insts.clone().detach().to(device)
     _labels = labels.clone().detach().cpu()
@@ -209,8 +231,11 @@ def test(model, dataset, args, insts, labels, adj, device, index=-1):
 
     return pred_acc, mic, mac, recall_per_class, precision_per_class
 
-
+# 測試模型在 source domain 上的表現
 def test_source(model, dataset, args, insts, labels, adj, device, index=-1):
+    """
+    測試模型在源域數據集上的分類準確率、f1得分、召回率和精確率。
+    """
     model.eval()
     _insts = insts.clone().detach().to(device)
     _labels = labels.clone().detach().cpu()
@@ -227,7 +252,11 @@ def test_source(model, dataset, args, insts, labels, adj, device, index=-1):
 
     return pred_acc, mic, mac, recall_per_class, precision_per_class
 
+# 微調模型，針對目標領域進行精調
 def fine_tune(model, dataset, args, target_insts, target_labels, target_adj, i, device, graph, few_shot_labels):
+    """
+    微調模型，使其適應 target domain，並記錄最佳準確率。
+    """
     dataset.change_task('finetune')
     model.finetune()
     finetune_optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=args.finetune_lr, weight_decay=args.weight_decay)
@@ -239,6 +268,7 @@ def fine_tune(model, dataset, args, target_insts, target_labels, target_adj, i, 
     f_data_loader = DataLoader(dataset, batch_size=bt_size,
                                 shuffle=False, num_workers=0, collate_fn=dataset.collate)
 
+    # 初始測試精度，無微調
     pred_acc, mic, mac, recall_per_class, precision_per_class = test(model, dataset, args, target_insts, target_labels, target_adj, device, -1)
     log.add_metric(graph.name + '_pred_acc', pred_acc, 0)
     log.add_metric(graph.name + '_micro_F', mic, 0)
@@ -248,6 +278,8 @@ def fine_tune(model, dataset, args, target_insts, target_labels, target_adj, i, 
 
     best_target_acc = 0.0
     best_epoch = 0.0
+
+    # 開始微調訓練
     for epoch in range(args.finetune_epoch):
         model.train()
         if epoch == args.pre_finetune:
@@ -264,6 +296,7 @@ def fine_tune(model, dataset, args, target_insts, target_labels, target_adj, i, 
             loss.backward()
             finetune_optimizer.step()
 
+        # 計算微調後的測試精度
         pred_acc, mic, mac, recall_per_class, precision_per_class = test(model, dataset, args, target_insts, target_labels, target_adj, device, -1)
         logger.info("Iteration {}, loss = {}, acc = {}".format(epoch, running_loss/len(f_data_loader), pred_acc))
         log.add_metric(graph.name+'_finetuine_loss', running_loss/len(f_data_loader), epoch)
@@ -272,6 +305,8 @@ def fine_tune(model, dataset, args, target_insts, target_labels, target_adj, i, 
         log.add_metric(graph.name + '_macro_F', mac, epoch+1)
         log.add_metric(graph.name + '_recall_per_class', recall_per_class, epoch+1)
         log.add_metric(graph.name + '_precision_per_class', precision_per_class, epoch+1)
+        
+        # 儲存最佳精度
         if pred_acc > best_target_acc:
             best_target_acc = pred_acc
             best_epoch = epoch
@@ -286,7 +321,7 @@ def fine_tune(model, dataset, args, target_insts, target_labels, target_adj, i, 
 
     return best_target_acc
 
-
+# 微調模型，針對目標領域進行精調
 def agnn_fine_tune(model, dataset, args, target_insts, target_labels, target_adj, i, device, graph, few_shot_labels):
     dataset.change_task('finetune')
     finetune_optimizer = optim.Adam(model.parameters(), lr=args.finetune_lr, weight_decay=args.weight_decay)
@@ -301,6 +336,7 @@ def agnn_fine_tune(model, dataset, args, target_insts, target_labels, target_adj
     pred_acc, mic, mac, recall_per_class, precision_per_class = test(model, dataset, args, target_insts, target_labels, target_adj, device, -1)
     best_target_acc = 0.0
     best_epoch = 0.0
+    
     for epoch in tqdm(range(1000)):
         model.train()
         running_loss = 0
@@ -324,6 +360,7 @@ def agnn_fine_tune(model, dataset, args, target_insts, target_labels, target_adj
 
 time_start = time.time()
 
+# 載入數據集，初始化圖形和參數
 graphs = []
 num_nodes, input_dim = [], []
 _alpha, _lambda = [], []
@@ -337,12 +374,15 @@ for i, data in enumerate(datasets):
         _lambda.append(0)
     else:
         _lambda.append(float(args._lambda[i]))
+    
+    # 加載圖形數據
     g = GraphLoader(data, sparse=True, args=args)
     g.process()
     graphs.append(g)
     num_nodes.append(g.X.shape[0])
     input_dim.append(g.X.shape[1])
 
+# 建立數據集目錄
 dataset_ = []
 data_name = []
 for g in graphs:
@@ -361,9 +401,12 @@ n_nodes = min(num_nodes)
 time_end = time.time()
 logger.info("Time used to process the data set = {} seconds.".format(time_end - time_start))
 
+# 設定數據集的數量
 num_data_sets = len(dataset_)
 
+# 進行訓練和微調
 for i in range(num_data_sets):
+    # 每個數據集處理
     graphs_ = []
     for j in range(len(graphs)):
         graphs_.append(copy.deepcopy(graphs[j]))
@@ -381,6 +424,7 @@ for i in range(num_data_sets):
     nclass.append(graphs_[i].Y.cpu().numpy().max()+1)
     ndim.append(int(graphs_[i].X.shape[1]))
     
+    # 設定域標籤並進行調整
     selected_idx = []
     selected_label = []
     if nclass[-1] < nclass[0]:
@@ -402,7 +446,7 @@ for i in range(num_data_sets):
                 graphs_[j].X = graphs_[j].X[selected_idx]
                 graphs_[j].normadj = graphs_[j].normadj.to_dense()[selected_idx,:][:,selected_idx].to_sparse()
                 graphs_[j].adj = graphs_[j].adj.to_dense()[selected_idx,:][:,selected_idx].to_sparse()
-                graphs_[j].G = nx.from_numpy_matrix(graphs_[j].adj.to_dense().cpu().numpy())
+                graphs_[j].G = nx.from_numpy_array(graphs_[j].adj.to_dense().cpu().numpy())
                 graphs_[j].Y = graphs_[j].Y[selected_idx]
                 copy_labels = copy.deepcopy(graphs_[j].Y)
                 for s_label in selected_label:
@@ -414,6 +458,7 @@ for i in range(num_data_sets):
                                         shuffle=True, num_workers=0, collate_fn=dataset[j].collate, drop_last=True)
 
     # Build source instances.
+    # 訓練域和目標域的資料設定
     source_insts = []
     source_adj = []
     source_labels = []
@@ -457,6 +502,7 @@ for i in range(num_data_sets):
     few_shot_labels = target_labels.clone()*0-1
     few_shot_labels[dataset[i].finetune_indices] = target_labels[dataset[i].finetune_indices]
 
+    # 設定和初始化模型
     transnet = TransNet(configs).to(device)
     target_agent = GeneralSignal(graphs_[i], graphs_[i].adj, target_labels, target_insts, dataset=dataset[i], 
             nhid=args.dim, device=device, args = args, seed=args.seed, model=transnet, index=-1, _lambda=_lambda[i])
@@ -468,8 +514,10 @@ for i in range(num_data_sets):
             jj += 1
     optimizer = optim.Adam(transnet.parameters(), lr=lr, betas=(0.5, 0.999))
 
+    # 演算法中的domain-invariant representations和trinity signals的生成與更新過程
     if args.weight is None:
         # Train an assistant GNN
+        # 訓練一個輔助性的圖神經網路(Assistant GNN)
         print("########### Train assistant GNN ###################")
         agnn_configs = {"input_dim": ndim[-1], "hidden_layers": args.hidden, "num_classes": nclass[-1],
                 "num_epochs": args.epoch, "batch_size": args.batch_size, "lr": args.lr, "mu": args.mu, "num_sources":
@@ -484,31 +532,57 @@ for i in range(num_data_sets):
 
 
         ############ Get assistant nodes  ###################
+        # 這部分是在選擇輔助節點(assistant nodes)
+
+        # 使用GNN模型進行推論，獲得類別機率
+        # 使用 no_grad() 因為只需推論不需計算梯度
         with torch.no_grad():
+            # logprobs 形狀為 [節點數, 類別數]，包含每個節點屬於各個類別的機率
             logprobs, _, _ = agnn.inference(target_insts, target_adj)
-        preds_labels = torch.max(logprobs, 1)[1].squeeze_().detach().cpu()
-        all_idx = torch.tensor([i for i in range(logprobs.shape[0])])
-        logmax_i = logprobs.max(1)[1]
-        logmax_v = logprobs.max(1)[0]
+        
+        # 獲取預測標籤和對應的最大機率值
+        preds_labels = torch.max(logprobs, 1)[1].squeeze_().detach().cpu()  # 預測的類別
+        all_idx = torch.tensor([i for i in range(logprobs.shape[0])])      # 所有節點的索引
+        logmax_i = logprobs.max(1)[1]  # 每個節點最高機率對應的類別
+        logmax_v = logprobs.max(1)[0]  # 每個節點的最高機率值
+
+        # 對每個類別選擇高置信度節點
         ass_nodes = []
         ass_labels = []
         ass_size = []
-        few_shot_idx = dataset[i].finetune_indices
+        few_shot_idx = dataset[i].finetune_indices # 已有標籤的樣本索引
+
         for idx in range(nclass[-1]):
+            # 假設 device 是 CUDA（如果可用），否則是 CPU
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+            # 確保所有張量都在同一設備上
+            all_idx = all_idx.to(device)
+            logmax_i = logmax_i.to(device)
+            logmax_v = logmax_v.to(device)
+
+            # 使用同一設備上的張量進行索引操作
             t_idx = all_idx[logmax_i == idx][torch.sort(logmax_v[logmax_i == idx], descending=True)[1]]
-            ass_size.append(t_idx)
+
+            # 如果該類別的節點數量少於指定的輔助節點數量
             if t_idx.shape[0] < args.assis_num:
+                # 選擇所有節點（排除已有標籤的樣本）
                 ass_nodes.append(torch.tensor([i.item() for i in t_idx if i not in few_shot_idx]))
             else:
+                # 選擇前 args.assis_num 個節點（排除已有標籤的樣本）
                 ass_nodes.append(torch.tensor([i.item() for i in t_idx[:args.assis_num] if i not in few_shot_idx]))
             ass_labels.append(torch.ones(ass_nodes[-1].shape, dtype=int)*idx)
-        ass_idx = torch.cat([i for i in ass_nodes])
-        ass_label =  torch.cat([i for i in ass_labels])
+        # 合併所有類別的輔助節點和標籤
+        ass_idx = torch.cat([i for i in ass_nodes]) # 所有選中的輔助節點索引
+        ass_label =  torch.cat([i for i in ass_labels]) # 對應的標籤
+        
+        # 初始化輔助標籤張量（-1表示未標記）
         ass_labels = target_labels.clone()*0-1
+        # 將選中的輔助節點賦予對應的標籤
         ass_labels[ass_idx] = ass_label.to(device)
         ######################################################
 
-        
+        # 進行模型訓練與測試
         best_target_acc = 0.0
         best_epoch = 0.0
         time_start = time.time()
@@ -585,6 +659,7 @@ for i in range(num_data_sets):
     logger.info("label prediction accuracy on {} = {}, time used = {} seconds.".
                 format(data_name[i], pred_acc, time_end - time_start))
 
+    # 重置任務
     dataset[i].change_task('train')
     # if args.only == True:
     #     break 
