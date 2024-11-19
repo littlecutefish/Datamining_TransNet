@@ -1,0 +1,16 @@
+name: dm_transnet
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.8
+  - pandas
+  - torch
+  - numpy
+  - torch_geometric
+  - scipy
+  - scikit-learn
+  - matplotlib
+  - pymetis
+  - structlog
+  - tensorboardX

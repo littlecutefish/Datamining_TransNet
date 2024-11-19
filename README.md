@@ -1,19 +1,29 @@
 # TransNet
 
-This is a modified pytorch implementation of [_**Augmenting Knowledge Transfer across Graphs**_](https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=10027706) (ICDM 2022).
+This is a modified pytorch implementation of [_**Augmenting Knowledge Transfer across Graphs**_](https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=10027706) (ICDM 2022) for **113 Fall Data Mining Final**.
 
 ### Environment
-#### ❯ python --version
-Python 3.8.20
+1. 創建conda環境
+```bash
+conda env create -f environment.yml
+```
 
-#### ❯ nvcc --version
-nvcc: NVIDIA (R) Cuda compiler driver
-Copyright (c) 2005-2022 NVIDIA Corporation
-Built on Wed_Sep_21_10:41:10_Pacific_Daylight_Time_2022
-Cuda compilation tools, release 11.8, V11.8.89
+2. 啟動環境
+```bash
+conda activate dm_transnet # your environment name
+```
+
+3. 驗證安裝是否成功
+```bash
+python -c "import pandas, torch, numpy, torch_geometric, scipy, sklearn, matplotlib, pymetis, structlog, tensorboardX; print('All packages imported successfully!')"
+```
+
+4. 我們需要使用CUDA，可以參考 https://medium.com/@yesaouo/cuda-cudnn-tensorflow-gpu-%E5%AE%89%E8%A3%9D%E6%95%99%E5%AD%B8-windows%E9%81%A9%E7%94%A8-%E5%A4%9A%E7%89%88%E6%9C%AC%E5%85%BC%E5%AE%B9-b2688614c506
+
 
 ### Datasets
-The original datasets M2 and A1 are provided in this repository. Additional datasets (physics and cs) have been added for academic domain transfer learning experiments. Please download other datasets from the original papers listed in the paper.
+The original datasets M2 and A1 are provided in this repository. Additional datasets (physics and cs) have been added for academic domain transfer learning experiments. 
+Please download other datasets from the original papers listed in the paper.
 
 ### Implementation Details
 _**TransNet**_ is firstly pre-trained on the source dataset for 2000 epochs; then it is fine-tuned on the target dataset for 800 epochs using limited labeled data in each class. We use Adam optimizer with learning rate 3e-3. α in the beta-distribution of trinity-signal mixup is set to 1.0 and the output dimension of MLP in domain unification module is set to 100 by default. Precision is used as the evaluation metric.
@@ -38,9 +48,13 @@ python ./src/transnet.py --name='logs_physics_cs_1000_400_GAT' --datasets='cs+ph
 #### Original Transfer Tasks
 [M2+A1]
 ```bash
-python ./src/transnet.py --name='logs_M2+A1_1000_400_4' --datasets='M2+A1' --finetune_epoch=400 --mu=1e-2 --seed=100 --gnn='gcn' --few_shot=5  --epoch=1000  --batch_size=4   --finetune_lr=0.01  --pre_finetune=200 --ratio=0.7 --disc='3' --_lambda=0.02  --_lambda=0.05 --_alpha=0.01 --_alpha=0.01
+python ./src/transnet.py --name='logs_A1_M2_1000_400' --datasets='M2+A1' --finetune_epoch=400 --mu=1e-2 --seed=100 --gnn='gcn' --few_shot=5  --epoch=1000  --batch_size=-1   --finetune_lr=0.01  --pre_finetune=200 --ratio=0.7 --disc='3' --_lambda=0.02  --_lambda=0.05 --_alpha=0.01 --_alpha=0.01
 
 python ./src/transnet.py --name='logs_A1_M2_1000_400_GAT' --datasets='M2+A1' --finetune_epoch=400 --mu=1e-2 --seed=100 --gnn='gat' --few_shot=5  --epoch=1000  --batch_size=-1   --finetune_lr=0.01  --pre_finetune=200 --ratio=0.7 --disc='3' --_lambda=0.02  --_lambda=0.05 --_alpha=0.01 --_alpha=0.01
+
+python ./src/transnet.py --name='logs_A1_M2_1000_400_new' --datasets='M2+A1' --finetune_epoch=400 --mu=1e-2 --seed=100 --gnn='gcn' --few_shot=5  --epoch=1000  --batch_size=-1   --finetune_lr=0.01  --pre_finetune=200 --ratio=0.7 --disc='3' --_lambda=0.02  --_lambda=0.05 --_alpha=0.01 --_alpha=0.01
+
+python ./src/transnet.py --name='logs_A1_M2_2000_800_new' --datasets='M2+A1' --finetune_epoch=800 --mu=1e-2 --seed=100 --gnn='gcn' --few_shot=5  --epoch=2000  --batch_size=-1   --finetune_lr=0.01  --pre_finetune=200 --ratio=0.7 --disc='3' --_lambda=0.02  --_lambda=0.05 --_alpha=0.01 --_alpha=0.01
 ```
 
 [comp+photo]
