@@ -66,7 +66,10 @@ class TransNet(nn.Module):
         )
 
         # Parameter of the first dimension reduction layer.
-        self.dimRedu = nn.ModuleList([torch.nn.Sequential(nn.Dropout(p=0.7), nn.Linear(ndim, self.h_dim)) for ndim in configs["input_dim"]])
+        self.dimRedu = nn.ModuleList([torch.nn.Sequential(
+            nn.Dropout(p=0.7), 
+            nn.Linear(ndim, self.h_dim)) 
+            for ndim in configs["input_dim"]])
         
         # Parameter of the final softmax classification layer.
         # 1-2. trinity-signal 分類器 g(.)
@@ -74,8 +77,8 @@ class TransNet(nn.Module):
                                             nn.Linear(2*configs["ndim"], configs["ndim"]),
                                             ) for _ in configs["num_classes"]])
         self.classifier = nn.ModuleList([torch.nn.Sequential(
-                                            nn.Dropout(p=0.5),
-                                            nn.Linear(configs["ndim"], 2*nclass+1)) for nclass in configs["num_classes"]])
+            nn.Dropout(p=0.5),
+            nn.Linear(configs["ndim"], 2*nclass)) for nclass in configs["num_classes"]])
 
         # 1-3. 下游任務分類器 h(.)
         self.gnn_classifier = GNN(nfeat=configs["ndim"], 
@@ -157,7 +160,6 @@ class TransNet(nn.Module):
 
 # ======================================================
 class GeneralSignal(object):
-
     def __init__(self, graph, adj, labels, features, nhid, device, dataset, args, seed, model, index, _lambda, dicts=None):
         self.G = graph.G
         self.model = model
@@ -169,13 +171,9 @@ class GeneralSignal(object):
         self.nfeat = features.shape[1]
         self.cached_adj_norm = None
         self.device = device
-        self.sample_num = []
-        self.train_sample_num = []
-        self.vali_sample_num = []
-        self.test_sample_num = []
         self.labels = labels
         self.nlabel = self.labels.max()+1
-        self.index=index
+        self.index = index
         self.idx_train = np.sort(np.array(dataset.train_indices))
         self.idx_test = np.sort(np.array(dataset.test_indices))
         self.idx_vali = np.sort(np.array(dataset.val_indices))
@@ -189,56 +187,114 @@ class GeneralSignal(object):
         np.random.seed(seed)
 
         self.all = np.arange(self.adj.shape[0])
-        self.agent = NodeDistance(self.G, name=self.name)
-        self.pseudo_labels = self.agent.get_label().to(self.device)
-        self.train_pseudo_labels = self.pseudo_labels[self.idx_train,:][:,self.idx_train]
-        self.train_distance = self.agent.distance[self.idx_train,:][:,self.idx_train]
+        
+        # 移除所有距離相關計算,改為簡單的隨機採樣準備
+        self.base_samples = min(500, len(self.idx_train) // 10)
+        self.sample_num = [self.base_samples * (i+1) for i in range(6)]
+        self.train_sample_num = [self.base_samples * (i+1) // 2 for i in range(6)]
+        
+        print("\n=== Dataset Information ===")
+        print(f"Training set size: {len(self.idx_train)}")
+        print(f"Total nodes: {self.node_num}")
+        
+        print("\n=== Sampling Configuration ===")
+        print(f"Base samples: {self.base_samples}")
+        print(f"Sample numbers: {self.sample_num}")
+        print(f"Train sample numbers: {self.train_sample_num}")
+        print("============================\n")
 
-        self.train_tmps = []
-        self.tmps = []
-
-        ###############################################################
-        self.thresh = [self.agent.distance.max()+1, self.agent.same_node, 0.01, 0.004, 0.001, 0.0002, 0]
-
-        for i in range(0, 6): 
-            self.tmps.append(np.array(np.where((self.agent.distance < self.thresh[i])&(self.agent.distance >= self.thresh[i+1]))).transpose())
-            if i == 0:
-                self.sample_num.append(self.tmps[0].shape[0] // 10)
-            else:
-                self.sample_num.append(self.sample_num[0]*2*i)
-        print(self.sample_num)
-
-        for i in range(0, 6):
-            self.train_tmps.append(np.array(np.where((self.train_distance < self.thresh[i])&(self.train_distance >= self.thresh[i+1]))).transpose())
-            if i == 0:
-                self.train_sample_num.append(self.train_tmps[0].shape[0] // 10)
-            else:
-                self.train_sample_num.append(self.train_sample_num[0]*2*i)
-
-        print(self.train_sample_num)
+    def random_sample(self, num_samples, use_train=False):
+        """
+        隨機採樣方法
+        """
+        if use_train:
+            available_indices = np.arange(len(self.idx_train))
+            max_samples = len(self.idx_train)
+        else:
+            available_indices = np.arange(self.node_num)
+            max_samples = self.node_num
+            
+        safe_num_samples = min(num_samples, max_samples)
+        
+        idx1 = np.random.choice(available_indices, safe_num_samples, replace=True)
+        idx2 = np.random.choice(available_indices, safe_num_samples, replace=True)
+        
+        return idx1, idx2
 
     def get_dicts(self, embeddings, idx_assis, labels, relax=False):
-        label0_loss, label1_loss, dist_loss = 0.0, 0.0, 0.0
+        """
+        為 few-shot 學習生成字典映射
+        """
+        
         permu = np.random.permutation(idx_assis.shape[0])
         few_shot_pair = torch.cat((embeddings[idx_assis], embeddings[idx_assis][permu]), 1)
         few_shot_embedding = self.model.triplet_embedding[0](few_shot_pair)
         few_shot_output = self.model.classifier[0](few_shot_embedding)
-        sudo_label_num = (few_shot_output.shape[-1]-1)//2
+        sudo_label_num = few_shot_output.shape[-1] // 2
+        
         few_shot_pred_label0 = F.log_softmax(few_shot_output[:, :sudo_label_num], dim=1)
-        few_shot_pred_label1 = F.log_softmax(few_shot_output[:, sudo_label_num:2*sudo_label_num], dim=1)
+        few_shot_pred_label1 = F.log_softmax(few_shot_output[:, sudo_label_num:], dim=1)
         few_shot_pred_label = torch.cat((few_shot_pred_label0, few_shot_pred_label1), 0)
         few_shot_label = torch.cat((labels, labels[permu]), 0)
+        
         sudo_labels, self.dicts = assign_sudo_label(few_shot_pred_label, few_shot_label, self.device, relax=relax)
+        
+        return sudo_labels
 
-    # M2
     def make_loss(self, embeddings, dicts=None, task='train'):
         if self.index == -1:
-            node_pairs = self.sample(self.agent.distance, self.tmps, k=self.sample_num)
+            num_samples = min(sum(self.sample_num), self.node_num)
+            
+            node_pairs = self.random_sample(num_samples)
             embeddings0 = embeddings[node_pairs[0]]
             embeddings1 = embeddings[node_pairs[1]]
+
+            permu = np.random.permutation(self.idx_finetune.shape[0])
+            few_shot_pair = torch.cat((embeddings[self.idx_finetune], embeddings[self.idx_finetune][permu]), 1)
+            few_shot_embedding = self.model.triplet_embedding[0](few_shot_pair)
+            few_shot_output = self.model.classifier[0](few_shot_embedding)
+            sudo_label_num = few_shot_output.shape[-1] // 2
+            
+            few_shot_pred_label0 = F.log_softmax(few_shot_output[:, :sudo_label_num], dim=1)
+            few_shot_pred_label1 = F.log_softmax(few_shot_output[:, sudo_label_num:], dim=1)
+            few_shot_pred_label = torch.cat((few_shot_pred_label0, few_shot_pred_label1), 0)
+            few_shot_label = torch.cat((self.labels[self.idx_finetune], self.labels[self.idx_finetune][permu]), 0)
+            
+            if few_shot_label.max() >= sudo_label_num:
+                few_shot_label = torch.clamp(few_shot_label, 0, sudo_label_num - 1)
+            
+            sudo_labels, _ = assign_sudo_label(few_shot_pred_label, few_shot_label, self.device, dicts=dicts)
+        
+            label0_loss, label1_loss = 0.0, 0.0 
+            
+            # Mixup 只考慮標籤
+            if self.mixup:
+                iter_num = 1
+                for _ in range(iter_num):
+                    x_mix, permuted_idx, lam = mixup_hidden(few_shot_embedding, self.alpha)
+                    o_mix = self.model.classifier[0](x_mix)
+                    p_mix0 = o_mix[:, :sudo_label_num]
+                    p_mix1 = o_mix[:, sudo_label_num:]
+                    
+                    labels0 = sudo_labels[:self.idx_finetune.shape[0]].clone()
+                    labels1 = sudo_labels[self.idx_finetune.shape[0]:].clone()
+                    labels0 = torch.clamp(labels0, 0, sudo_label_num - 1)
+                    labels1 = torch.clamp(labels1, 0, sudo_label_num - 1)
+                    
+                    label0_loss += mixup_hidden_criterion(p_mix0, labels0, 
+                                                        labels0[permuted_idx], lam)
+                    label1_loss += mixup_hidden_criterion(p_mix1, labels1, 
+                                                        labels1[permuted_idx], lam)
+                label0_loss, label1_loss = label0_loss/iter_num, label1_loss/iter_num
+            else:
+                label0_loss = F.nll_loss(few_shot_pred_label0, 
+                                       torch.clamp(sudo_labels[:self.idx_finetune.shape[0]], 0, sudo_label_num - 1))
+                label1_loss = F.nll_loss(few_shot_pred_label1, 
+                                       torch.clamp(sudo_labels[self.idx_finetune.shape[0]:], 0, sudo_label_num - 1))
         else:
             if task == 'train':
-                node_pairs = self.sample(self.train_distance, self.train_tmps, k=self.train_sample_num)
+                num_samples = min(sum(self.train_sample_num), len(self.idx_train))
+                node_pairs = self.random_sample(num_samples, use_train=True)
                 embeddings0 = embeddings[self.idx_train[node_pairs[0]]]
                 embeddings1 = embeddings[self.idx_train[node_pairs[1]]]
             elif task == 'vali':
@@ -246,85 +302,34 @@ class GeneralSignal(object):
                 embeddings0 = embeddings[node_pairs[0]]
                 embeddings1 = embeddings[node_pairs[1]]
 
-        embedding_pair = torch.cat((embeddings0, embeddings1), 1)
+            embedding_pair = torch.cat((embeddings0, embeddings1), 1)
+            hidden_embedding = self.model.triplet_embedding[self.index](embedding_pair)
+            output = self.model.classifier[self.index](hidden_embedding)
 
-        hidden_embedding = self.model.triplet_embedding[self.index](embedding_pair)
-        output = self.model.classifier[self.index](hidden_embedding)
-
-        label0_loss, label1_loss, dist_loss = 0.0, 0.0, 0.0
-        if self.index == -1:
-            # 使用 few-shot 樣本生成 pair
-            permu = np.random.permutation(self.idx_finetune.shape[0])
-            few_shot_pair = torch.cat((embeddings[self.idx_finetune], embeddings[self.idx_finetune][permu]), 1)
-            few_shot_embedding = self.model.triplet_embedding[0](few_shot_pair)
-            few_shot_output = self.model.classifier[0](few_shot_embedding)
-            sudo_label_num = (few_shot_output.shape[-1]-1)//2
-            few_shot_pred_label0 = F.log_softmax(few_shot_output[:, :sudo_label_num], dim=1)
-            few_shot_pred_label1 = F.log_softmax(few_shot_output[:, sudo_label_num:2*sudo_label_num], dim=1)
-            few_shot_pred_label = torch.cat((few_shot_pred_label0, few_shot_pred_label1), 0)
-            few_shot_label = torch.cat((self.labels[self.idx_finetune], self.labels[self.idx_finetune][permu]), 0)
-            sudo_labels, _ = assign_sudo_label(few_shot_pred_label, few_shot_label, self.device, dicts=dicts)
-            pred_dist = output[:, -1]
-            dist_loss_p = F.mse_loss(pred_dist, self.pseudo_labels[node_pairs], reduction='mean')
-
-            # Mixup 操作
-            if self.mixup:
-                iter_num = 1
-                for _ in range(iter_num):
-                    x_mix, permuted_idx, lam = mixup_hidden(few_shot_embedding, self.alpha)
-                    o_mix = self.model.classifier[0](x_mix)
-                    p_mix0 = o_mix[:, :sudo_label_num]
-                    p_mix1 = o_mix[:, sudo_label_num:2*sudo_label_num]
-
-                    # Mixup loss calculation
-                    label0_loss += mixup_hidden_criterion(p_mix0, sudo_labels[:self.idx_finetune.shape[0]], sudo_labels[:self.idx_finetune.shape[0]][permuted_idx], lam)
-                    label1_loss += mixup_hidden_criterion(p_mix1, sudo_labels[self.idx_finetune.shape[0]:], sudo_labels[self.idx_finetune.shape[0]:][permuted_idx], lam)
-                    
-                    x_mix, permuted_idx, lam = mixup_hidden(hidden_embedding, self.alpha)
-                    o_mix = self.model.classifier[0](x_mix)
-                    pd_mix = o_mix[:, -1]
-                    d_mix = lam * self.pseudo_labels[node_pairs] + (1 - lam) * self.pseudo_labels[node_pairs][permuted_idx]
-                    dist_loss += ((dist_loss_p + F.mse_loss(pd_mix, d_mix, reduction='mean')) / 2)
-                label0_loss, label1_loss, dist_loss = label0_loss/iter_num, label1_loss/iter_num, dist_loss/iter_num
-            else:
-                label0_loss = F.nll_loss(few_shot_pred_label0, sudo_labels[:self.idx_finetune.shape[0]])
-                label1_loss = F.nll_loss(few_shot_pred_label1, sudo_labels[self.idx_finetune.shape[0]:])
-                dist_loss = dist_loss_p
-        else:
             if task == 'train':
-                task_labels = self.train_pseudo_labels
                 task_index = self.idx_train
             elif task == 'vali':
-                task_labels = self.pseudo_labels
                 task_index = self.all
+
             pred_label0 = output[:, :self.nlabel]
-            pred_label1 = output[:, self.nlabel:2*self.nlabel]
+            pred_label1 = output[:, self.nlabel:]
             pred_label0 = F.log_softmax(pred_label0, dim=1)
             pred_label1 = F.log_softmax(pred_label1, dim=1)
-            label0_loss = F.nll_loss(pred_label0, self.labels[task_index[node_pairs[0]]])
-            label1_loss = F.nll_loss(pred_label1, self.labels[task_index[node_pairs[1]]])
-            pred_dist = output[:, -1]
-            dist_loss = F.mse_loss(pred_dist, task_labels[node_pairs], reduction='mean')
-            if task == 'train':
-                if self.mixup:
-                    x_mix, permuted_idx, lam = mixup_hidden(hidden_embedding, self.alpha)
-                    o_mix = self.model.classifier[self.index](x_mix)
-                    p_mix0 = o_mix[:, :self.nlabel]
-                    p_mix1 = o_mix[:, self.nlabel:2*self.nlabel]
-                    label0_loss = mixup_hidden_criterion(p_mix0, self.labels[task_index[node_pairs[0]]], self.labels[task_index[node_pairs[0]]][permuted_idx], lam)
-                    label1_loss = mixup_hidden_criterion(p_mix1, self.labels[task_index[node_pairs[1]]], self.labels[task_index[node_pairs[1]]][permuted_idx], lam)
-                    pd_mix = o_mix[:, -1]
-                    d_mix = lam * task_labels[node_pairs] + (1 - lam) * task_labels[node_pairs][permuted_idx]
-                    dist_loss = (dist_loss + F.mse_loss(pd_mix, d_mix, reduction='mean')) / 2      
+            
+            labels0 = torch.clamp(self.labels[task_index[node_pairs[0]]], 0, self.nlabel - 1)
+            labels1 = torch.clamp(self.labels[task_index[node_pairs[1]]], 0, self.nlabel - 1)
+            
+            label0_loss = F.nll_loss(pred_label0, labels0)
+            label1_loss = F.nll_loss(pred_label1, labels1)
 
-        return (label0_loss+label1_loss)/2 + self._lambda*dist_loss
-
-    def sample(self, labels, tmps, k):
-        node_pairs = []
-        for i in range(0, 6):
-            tmp = tmps[i]
-            indices = sample(range(len(tmp)), min(k[i], len(tmp)))
-            node_pairs.append(np.array(tmp[indices]))
-        node_pairs = np.concatenate((node_pairs[0], node_pairs[1], node_pairs[2], node_pairs[3], node_pairs[4], node_pairs[5]), 0).reshape(-1, 2).transpose()
-
-        return node_pairs[0], node_pairs[1]
+            if task == 'train' and self.mixup:
+                x_mix, permuted_idx, lam = mixup_hidden(hidden_embedding, self.alpha)
+                o_mix = self.model.classifier[self.index](x_mix)
+                p_mix0 = o_mix[:, :self.nlabel]
+                p_mix1 = o_mix[:, self.nlabel:]
+                
+                label0_loss = mixup_hidden_criterion(p_mix0, labels0, labels0[permuted_idx], lam)
+                label1_loss = mixup_hidden_criterion(p_mix1, labels1, labels1[permuted_idx], lam)
+        
+        return (label0_loss + label1_loss) / 2
+    
