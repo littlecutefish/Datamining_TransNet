@@ -38,11 +38,9 @@ The `tools` directory contains utility scripts for:
 #### Academic Domain Transfer Tasks
 [cs+physics]
 ```bash
-# Using GCN
 python ./src/transnet.py --name='logs_physics_cs_1000_400' --datasets='cs+physics' --finetune_epoch=400 --mu=1e-2 --seed=100 --gnn='gcn' --few_shot=5  --epoch=1000  --batch_size=-1   --finetune_lr=0.01  --pre_finetune=200 --ratio=0.7 --disc='3' --_lambda=0.02  --_lambda=0.05 --_alpha=0.01 --_alpha=0.01
 
-# Using GAT
-python ./src/transnet.py --name='logs_physics_cs_1000_400_GAT' --datasets='cs+physics' --finetune_epoch=400 --mu=1e-2 --seed=100 --gnn='gat' --few_shot=5  --epoch=1000  --batch_size=-1   --finetune_lr=0.01  --pre_finetune=200 --ratio=0.7 --disc='3' --_lambda=0.02  --_lambda=0.05 --_alpha=0.01 --_alpha=0.01
+python ./src/transnet.py --name='logs_physics_cs_2000_800' --datasets='cs+physics' --finetune_epoch=800 --mu=1e-2 --seed=100 --gnn='gcn' --few_shot=5  --epoch=2000  --batch_size=-1   --finetune_lr=0.01  --pre_finetune=200 --ratio=0.7 --disc='3' --_lambda=0.02  --_lambda=0.05 --_alpha=0.01 --_alpha=0.01
 ```
 
 #### Original Transfer Tasks
@@ -50,18 +48,63 @@ python ./src/transnet.py --name='logs_physics_cs_1000_400_GAT' --datasets='cs+ph
 ```bash
 python ./src/transnet.py --name='logs_A1_M2_1000_400' --datasets='M2+A1' --finetune_epoch=400 --mu=1e-2 --seed=100 --gnn='gcn' --few_shot=5  --epoch=1000  --batch_size=-1   --finetune_lr=0.01  --pre_finetune=200 --ratio=0.7 --disc='3' --_lambda=0.02  --_lambda=0.05 --_alpha=0.01 --_alpha=0.01
 
-python ./src/transnet.py --name='logs_A1_M2_1000_400_GAT' --datasets='M2+A1' --finetune_epoch=400 --mu=1e-2 --seed=100 --gnn='gat' --few_shot=5  --epoch=1000  --batch_size=-1   --finetune_lr=0.01  --pre_finetune=200 --ratio=0.7 --disc='3' --_lambda=0.02  --_lambda=0.05 --_alpha=0.01 --_alpha=0.01
-
-python ./src/transnet.py --name='logs_A1_M2_1000_400_new' --datasets='M2+A1' --finetune_epoch=400 --mu=1e-2 --seed=100 --gnn='gcn' --few_shot=5  --epoch=1000  --batch_size=-1   --finetune_lr=0.01  --pre_finetune=200 --ratio=0.7 --disc='3' --_lambda=0.02  --_lambda=0.05 --_alpha=0.01 --_alpha=0.01
-
-python ./src/transnet.py --name='logs_A1_M2_2000_800_new' --datasets='M2+A1' --finetune_epoch=800 --mu=1e-2 --seed=100 --gnn='gcn' --few_shot=5  --epoch=2000  --batch_size=-1   --finetune_lr=0.01  --pre_finetune=200 --ratio=0.7 --disc='3' --_lambda=0.02  --_lambda=0.05 --_alpha=0.01 --_alpha=0.01
+python ./src/transnet.py --name='logs_A1_M2_2000_800' --datasets='M2+A1' --finetune_epoch=800 --mu=1e-2 --seed=100 --gnn='gcn' --few_shot=5  --epoch=2000  --batch_size=-1   --finetune_lr=0.01  --pre_finetune=200 --ratio=0.7 --disc='3' --_lambda=0.02  --_lambda=0.05 --_alpha=0.01 --_alpha=0.01
 ```
 
 [comp+photo]
 ```bash
 python ./src/transnet.py --name='logs_photo_comp_1000_400' --datasets='comp+photo' --finetune_epoch=400 --mu=1e-2 --seed=100 --gnn='gcn' --few_shot=5  --epoch=1000  --batch_size=-1   --finetune_lr=0.01  --pre_finetune=200 --ratio=0.7 --disc='3' --_lambda=0.02  --_lambda=0.05 --_alpha=0.01 --_alpha=0.01
 
-python ./src/transnet.py --name='logs_photo_comp_1000_400_GAT' --datasets='comp+photo' --finetune_epoch=400 --mu=1e-2 --seed=100 --gnn='gat' --few_shot=5  --epoch=1000  --batch_size=-1   --finetune_lr=0.01  --pre_finetune=200 --ratio=0.7 --disc='3' --_lambda=0.02  --_lambda=0.05 --_alpha=0.01 --_alpha=0.01
+python ./src/transnet.py --name='logs_photo_comp_2000_800' --datasets='comp+photo' --finetune_epoch=800 --mu=1e-2 --seed=100 --gnn='gcn' --few_shot=5  --epoch=2000  --batch_size=-1   --finetune_lr=0.01  --pre_finetune=200 --ratio=0.7 --disc='3' --_lambda=0.02  --_lambda=0.05 --_alpha=0.01 --_alpha=0.01
+```
+
+[A2+A1]
+```bash
+python ./src/transnet.py --name='logs_A1_A2_1000_400' --datasets='A2+A1' --finetune_epoch=400 --mu=1e-2 --seed=100 --gnn='gcn' --few_shot=5  --epoch=1000  --batch_size=-1   --finetune_lr=0.01  --pre_finetune=200 --ratio=0.7 --disc='3' --_lambda=0.02  --_lambda=0.05 --_alpha=0.01 --_alpha=0.01
+
+python ./src/transnet.py --name='logs_A1_A2_2000_800' --datasets='A2+A1' --finetune_epoch=800 --mu=1e-2 --seed=100 --gnn='gcn' --few_shot=5  --epoch=2000  --batch_size=-1   --finetune_lr=0.01  --pre_finetune=200 --ratio=0.7 --disc='3' --_lambda=0.02  --_lambda=0.05 --_alpha=0.01 --_alpha=0.01
+```
+
+[D2+A1]
+```bash
+python ./src/transnet.py --name='logs_A1_D2_1000_400' --datasets='D2+A1' --finetune_epoch=400 --mu=1e-2 --seed=100 --gnn='gcn' --few_shot=5  --epoch=1000  --batch_size=-1   --finetune_lr=0.01  --pre_finetune=200 --ratio=0.7 --disc='3' --_lambda=0.02  --_lambda=0.05 --_alpha=0.01 --_alpha=0.01
+
+python ./src/transnet.py --name='logs_A1_D2_2000_800' --datasets='D2+A1' --finetune_epoch=800 --mu=1e-2 --seed=100 --gnn='gcn' --few_shot=5  --epoch=2000  --batch_size=-1   --finetune_lr=0.01  --pre_finetune=200 --ratio=0.7 --disc='3' --_lambda=0.02  --_lambda=0.05 --_alpha=0.01 --_alpha=0.01
+```
+
+[A2+D1]
+```bash
+python ./src/transnet.py --name='logs_D1_A2_1000_400' --datasets='A2+D1' --finetune_epoch=400 --mu=1e-2 --seed=100 --gnn='gcn' --few_shot=5  --epoch=1000  --batch_size=-1   --finetune_lr=0.01  --pre_finetune=200 --ratio=0.7 --disc='3' --_lambda=0.02  --_lambda=0.05 --_alpha=0.01 --_alpha=0.01
+
+python ./src/transnet.py --name='logs_D1_A2_2000_800' --datasets='A2+D1' --finetune_epoch=800 --mu=1e-2 --seed=100 --gnn='gcn' --few_shot=5  --epoch=2000  --batch_size=-1   --finetune_lr=0.01  --pre_finetune=200 --ratio=0.7 --disc='3' --_lambda=0.02  --_lambda=0.05 --_alpha=0.01 --_alpha=0.01
+```
+
+[D2+D1]
+```bash
+python ./src/transnet.py --name='logs_D1_D2_1000_400' --datasets='D2+D1' --finetune_epoch=400 --mu=1e-2 --seed=100 --gnn='gcn' --few_shot=5  --epoch=1000  --batch_size=-1   --finetune_lr=0.01  --pre_finetune=200 --ratio=0.7 --disc='3' --_lambda=0.02  --_lambda=0.05 --_alpha=0.01 --_alpha=0.01
+
+python ./src/transnet.py --name='logs_D1_D2_2000_800' --datasets='D2+D1' --finetune_epoch=800 --mu=1e-2 --seed=100 --gnn='gcn' --few_shot=5  --epoch=2000  --batch_size=-1   --finetune_lr=0.01  --pre_finetune=200 --ratio=0.7 --disc='3' --_lambda=0.02  --_lambda=0.05 --_alpha=0.01 --_alpha=0.01
+```
+
+[M2+D1]
+```bash
+python ./src/transnet.py --name='logs_D1_M2_1000_400' --datasets='M2+D1' --finetune_epoch=400 --mu=1e-2 --seed=100 --gnn='gcn' --few_shot=5  --epoch=1000  --batch_size=-1   --finetune_lr=0.01  --pre_finetune=200 --ratio=0.7 --disc='3' --_lambda=0.02  --_lambda=0.05 --_alpha=0.01 --_alpha=0.01
+
+python ./src/transnet.py --name='logs_D1_M2_2000_800' --datasets='M2+D1' --finetune_epoch=800 --mu=1e-2 --seed=100 --gnn='gcn' --few_shot=5  --epoch=2000  --batch_size=-1   --finetune_lr=0.01  --pre_finetune=200 --ratio=0.7 --disc='3' --_lambda=0.02  --_lambda=0.05 --_alpha=0.01 --_alpha=0.01
+```
+
+[pubmed+cora]
+```bash
+python ./src/transnet.py --name='logs_pubmed_cora_1000_400' --datasets='cora+pubmed' --finetune_epoch=400 --mu=1e-2 --seed=100 --gnn='gcn' --few_shot=5  --epoch=1000  --batch_size=-1   --finetune_lr=0.01  --pre_finetune=200 --ratio=0.7 --disc='3' --_lambda=0.02  --_lambda=0.05 --_alpha=0.01 --_alpha=0.01
+
+python ./src/transnet.py --name='logs_pubmed_cora_2000_800' --datasets='cora+pubmed' --finetune_epoch=800 --mu=1e-2 --seed=100 --gnn='gcn' --few_shot=5  --epoch=2000  --batch_size=-1   --finetune_lr=0.01  --pre_finetune=200 --ratio=0.7 --disc='3' --_lambda=0.02  --_lambda=0.05 --_alpha=0.01 --_alpha=0.01
+```
+
+[pubmed+citeseer]
+```bash
+python ./src/transnet.py --name='logs_pubmed_citeseer_1000_400' --datasets='citeseer+pubmed' --finetune_epoch=400 --mu=1e-2 --seed=100 --gnn='gcn' --few_shot=5  --epoch=1000  --batch_size=-1   --finetune_lr=0.01  --pre_finetune=200 --ratio=0.7 --disc='3' --_lambda=0.02  --_lambda=0.05 --_alpha=0.01 --_alpha=0.01
+
+python ./src/transnet.py --name='logs_pubmed_citeseer_2000_800' --datasets='citeseer+pubmed' --finetune_epoch=800 --mu=1e-2 --seed=100 --gnn='gcn' --few_shot=5  --epoch=2000  --batch_size=-1   --finetune_lr=0.01  --pre_finetune=200 --ratio=0.7 --disc='3' --_lambda=0.02  --_lambda=0.05 --_alpha=0.01 --_alpha=0.01
 ```
 
 For other transfer task examples (M2+D1, A2+A1, A2+D1, D2+A1, D2+D1), please refer to the original repository.
