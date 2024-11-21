@@ -11,7 +11,7 @@ from sklearn import preprocessing
 import json
 import scipy.sparse
 from torch_geometric.io import read_txt_array
-from torch_geometric.datasets import Amazon, Coauthor
+from torch_geometric.datasets import Amazon, Coauthor, Planetoid
 import os.path as osp
 import pdb
 
@@ -62,7 +62,7 @@ class GraphLoader(object):
     # A 是鄰接矩陣，描述了圖的結構
     # G 是NetworkX圖對象，提供了豐富的圖操作功能
     def _load(self):
-        if self.name == 'comp' or self.name == 'photo' or self.name == 'cs' or self.name == 'physics':
+        if self.name in {'comp', 'photo', 'cs', 'physics', 'cora', 'citeseer', 'pubmed'}:
             if self.name == 'comp':
                 dataset = Amazon(root='data/', name='computers')
             elif self.name == 'photo':
@@ -71,6 +71,12 @@ class GraphLoader(object):
                 dataset = Coauthor(root='data/', name='CS')
             elif self.name == 'physics':
                 dataset = Coauthor(root='data/', name='Physics')
+            elif self.name == 'cora':
+                dataset = Planetoid(root='data/', name='Cora')
+            elif self.name == 'citeseer':
+                dataset = Planetoid(root='data/', name='CiteSeer')
+            elif self.name == 'pubmed':
+                dataset = Planetoid(root='data/', name='PubMed')
             graph = dataset[0]
             self.X = graph.x.numpy().astype(np.float32)
             self.Y = graph.y.numpy()
