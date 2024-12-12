@@ -24,7 +24,11 @@ python -c "import pandas, torch, numpy, torch_geometric, scipy, sklearn, matplot
 ### Datasets
 - The original datasets M2 and A1 are provided in original paper's repository: https://github.com/yuzhenmao/TransNet -> data folder, download "input.zip"
 - Some other datasets: https://github.com/TrustAGI-Lab/UDAGCN
-- Our experiment datasets download link (cora, citeseer, pubmed, physics and cs...): https://pytorch-geometric.readthedocs.io/en/latest/modules/datasets.html#torch_geometric.datasets.Planetoid
+- Our experiment datasets download link: 
+  - [Cora, CiteSeer, PubMed]
+    https://pytorch-geometric.readthedocs.io/en/2.6.0/generated/torch_geometric.datasets.Planetoid.html#torch_geometric.datasets.Planetoid
+  - [CoAuthor CS, CoAuthor Physics]
+    https://pytorch-geometric.readthedocs.io/en/2.6.0/generated/torch_geometric.datasets.Coauthor.html#torch_geometric.datasets.Coauthor
 
 Please download other datasets from the original papers listed in the paper.
 
