@@ -25,6 +25,9 @@ python -c "import pandas, torch, numpy, torch_geometric, scipy, sklearn, matplot
 The original datasets M2 and A1 are provided in this repository. Additional datasets (physics and cs) have been added for academic domain transfer learning experiments. 
 Please download other datasets from the original papers listed in the paper.
 
+- Our experiment dataset download link: https://pytorch-geometric.readthedocs.io/en/latest/modules/datasets.html#torch_geometric.datasets.Planetoid
+
+
 ### Implementation Details
 _**TransNet**_ is firstly pre-trained on the source dataset for 2000 epochs; then it is fine-tuned on the target dataset for 800 epochs using limited labeled data in each class. We use Adam optimizer with learning rate 3e-3. α in the beta-distribution of trinity-signal mixup is set to 1.0 and the output dimension of MLP in domain unification module is set to 100 by default. Precision is used as the evaluation metric.
 
