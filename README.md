@@ -25,6 +25,7 @@ python -c "import pandas, torch, numpy, torch_geometric, scipy, sklearn, matplot
 The original datasets M2 and A1 are provided in this repository. Additional datasets (physics and cs) have been added for academic domain transfer learning experiments. 
 Please download other datasets from the original papers listed in the paper.
 
+- Some original dataset: https://github.com/TrustAGI-Lab/UDAGCN
 - Our experiment dataset download link: https://pytorch-geometric.readthedocs.io/en/latest/modules/datasets.html#torch_geometric.datasets.Planetoid
 
 
